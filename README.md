@@ -1,45 +1,70 @@
-# Artifact-chain template
+# CPSC 415 Week 3: Structured Output Classifier
 
-Starting point for major project submissions in CPSC 415 (AI Integration, Trinity College). Click **Use this template** on GitHub to create your own repository from it. Do not fork.
+A customer support message classifier that outputs structured JSON and runs a 5-case evaluation against two models.
 
-The course follows Anthropic's [AI-Native SDLC Playbook](https://claude.com/blog/the-ai-native-sdlc-playbook): every stage of the work leaves a short, version-controlled artifact. The agent writes most of the code. You decide what gets built, steer, verify, and explain every choice. These files are how you prove you understood what the agent built.
+## How to Run
 
-## Early labs
+Set your OpenRouter environment variables:
 
-Week 1 uses the minimal repository described in the course handout. Later introductory labs complete only the stages assigned so far. This template describes the full chain for team projects and the final portfolio; it does not require unintroduced artifacts in Week 1. Project languages are chosen and justified, with one separate guided exercise in an unfamiliar language.
-
-## The chain
-
-| Stage | File | Written by | Approved by |
-|---|---|---|---|
-| Plan | `intent/<name>.md` | The agent, after interviewing you | You |
-| Design | `spec.md` | The agent, from the approved intent | You, against the intent |
-| Build | `plan.md`, then code on a branch | The agent | You, before any code |
-| Test | tests, lint, CI | The agent | You confirm the loop actually ran |
-| Deploy | a pull request reviewed against `REVIEW.md` | A separate reviewing agent | You merge |
-| Maintain | a new `intent/<name>.md` | Triggered by a bug, a ticket, or a model change | You triage |
-
-`CLAUDE.md` and `REVIEW.md` travel with the repo and are graded artifacts.
-
-## Rules that are graded
-
-- Intent and spec exist before code. Plan is approved before implementation. The commit history shows it.
-- One pull request per feature, from a branch, reviewed before merge. Do not commit to `main` directly after the first commit.
-- `spec.md` states the **language** and the **model** for each component and why.
-- `ANNOTATION.md` answers the four questions for the finished project.
-- No secrets in the repo. `.claude/settings.local.json` and `.env` are ignored; the `.example` file shows the shape.
-
-## Submitting
-
-Tag the commit you are submitting and put the repository URL plus the tag on Moodle:
+```powershell
+$env:OPENROUTER_API_KEY = "your-api-key"
+$env:CHAT_BASE_URL = "[https://openrouter.ai/api/v1](https://openrouter.ai/api/v1)"
+$env:CHAT_MODEL = "minimax/minimax-m3"
 
 ```
-git tag tp1-submitted
-git push origin tp1-submitted
+
+Run the standalone classifier with a sample message:
+
+```powershell
+python classifier.py "The app keeps crashing whenever I click submit on the form."
+
 ```
 
-Tags the course uses: `intent-spec`, `tp1-submitted`, `tp2-submitted`, `portfolio-final`.
+Run the 5-case evaluation:
 
-## Running the agent
+```powershell
+python eval.py
+```
 
-Copy `.claude/settings.local.json.example` to `.claude/settings.local.json` and fill in your OpenRouter key and model slugs, or use the `orclaude` launcher from the [course repository](https://github.com/kousen/ai-integration-course/tree/main/scripts).
+Switch to the secondary model and run the evaluation again:
+
+```powershell
+$env:CHAT_MODEL = "xiaomi/mimo-v2.6-flash"
+python eval.py
+```
+
+## The Five Eval Cases
+
+1. **`billing-double-charge`**: Tests a clear billing issue ("I was charged twice for invoice #4421"). Catches basic billing classification errors.
+2. **`technical-crash-on-launch`**: Tests a clear bug report ("The app crashes on launch after the latest update."). Catches failures in technical triage.
+3. **`sales-enterprise-plan`**: Tests an inquiry about purchasing ("Do you have an enterprise plan for 50 users?"). Catches failures in sales categorization.
+4. **`unknown-lunch`**: Tests conversational chatter that is not a support request ("lunch tomorrow?"). Catches hallucinations on non-support tickets where the output must be `unknown`.
+5. **`ambiguous-billing-bug`**: Tests a boundary ticket ("When I click Pay Invoice the page throws an error, but my card was still charged."). Catches overfitting by accepting either `billing` or `technical` as a pass.
+
+## Model Comparison
+
+| Model | Cases Passed | Failed Cases | Observations |
+| --- | --- | --- | --- |
+| `minimax/minimax-m3` | 5/5 | None | Passed all 5 checks on the first try. Output stuck strictly to raw JSON and plain text rules with no Markdown formatting. |
+| `xiaomi/mimo-v2.6-flash` | 4/5 | `billing-double-charge` | Failed schema validation on exit code 7 because the reason contained Markdown characters. Correctly categorized the other 4 tickets. |
+
+### Observations
+
+The main difference between the two models was following the rule about no formatting in the reason text. `minimax/minimax-m3` strictly followed the instruction to use plain text without formatting across all test cases.
+
+On the other hand, `xiaomi/mimo-v2.6-flash` got the categories right but failed the `billing-double-charge` case by putting Markdown (like backticks or bolding) in the reason string. This is a model failure, not a bad test case, because the prompt explicitly said no Markdown.
+
+## Spec Correction
+
+During the spec review, I updated behavior check #6. The original draft stated that an ambiguous ticket could be assigned to any non-unknown category (including `sales`). I corrected it to require that the prediction match a specific allowed subset (accepting only `billing` or `technical`). This stops a model from passing if it picks a totally unrelated category for a tricky ticket.
+
+## Code Explanation
+
+In `classifier.py`:
+
+```python
+if cleaned.startswith("```json") and cleaned.endswith("```"):
+    cleaned = cleaned[7:-3].strip()
+```
+
+This snippet strips markdown code fences from the raw LLM output before passing it to `json.loads()`. Even when told to return pure JSON, lightweight models often wrap their responses in markdown formatting blocks. Stripping these out stops the parser from crashing on perfectly fine JSON.
