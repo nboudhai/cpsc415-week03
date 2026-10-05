@@ -20,12 +20,14 @@ One paragraph. Link to the current `spec.md`.
 - Branch and PR naming.
 
 ## Working rules
-
-For an introductory lab, follow its explicitly assigned stages; the full chain below applies to major projects. Week 1 uses its own minimal repository.
-
-- Write or update `intent/` and `spec.md` before code. Get `plan.md` approved before implementing.
-- One feature per branch and pull request. Never push to `main` directly.
-- Never commit `.env` or `.claude/settings.local.json`.
+- This is the Week 3 introductory lab. Stages assigned: intent and spec.
+  No plan.md, no branches or pull requests. Commit to main.
+- Standard library only, except that Java may add one JSON library jar.
 
 ## Common mistakes
 Things the agent got wrong before and must not repeat. Add to this list as they happen.
+
+## Conventions
+- Language: Python
+- Default Model: minimax/minimax-m3
+- File naming: lowercase with hyphens for markdown files, standard snake_case for Python.

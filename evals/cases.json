@@ -1,0 +1,27 @@
+[
+  {
+    "id": "billing-double-charge",
+    "message": "I was charged twice for invoice #4421 this month. Please refund the duplicate payment.",
+    "allowed_categories": ["billing"]
+  },
+  {
+    "id": "technical-crash-on-launch",
+    "message": "The app crashes on launch after the latest update and I can't get past the splash screen.",
+    "allowed_categories": ["technical"]
+  },
+  {
+    "id": "sales-enterprise-plan",
+    "message": "Do you have an enterprise plan for 50 users? We'd like pricing and a demo.",
+    "allowed_categories": ["sales"]
+  },
+  {
+    "id": "unknown-lunch",
+    "message": "lunch tomorrow?",
+    "allowed_categories": ["unknown"]
+  },
+  {
+    "id": "ambiguous-billing-bug",
+    "message": "When I click Pay Invoice the page throws an error, but my card was still charged.",
+    "allowed_categories": ["billing", "technical"]
+  }
+]
