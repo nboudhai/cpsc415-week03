@@ -8,7 +8,7 @@ Set your OpenRouter environment variables:
 
 ```powershell
 $env:OPENROUTER_API_KEY = "your-api-key"
-$env:CHAT_BASE_URL = "[https://openrouter.ai/api/v1](https://openrouter.ai/api/v1)"
+$env:CHAT_BASE_URL = "https://openrouter.ai/api/v1"
 $env:CHAT_MODEL = "minimax/minimax-m3"
 
 ```
@@ -41,30 +41,19 @@ python eval.py
 4. **`unknown-lunch`**: Tests conversational chatter that is not a support request ("lunch tomorrow?"). Catches hallucinations on non-support tickets where the output must be `unknown`.
 5. **`ambiguous-billing-bug`**: Tests a boundary ticket ("When I click Pay Invoice the page throws an error, but my card was still charged."). Catches overfitting by accepting either `billing` or `technical` as a pass.
 
-## Model Comparison
-
-| Model | Cases Passed | Failed Cases | Observations |
-| --- | --- | --- | --- |
-| `minimax/minimax-m3` | 5/5 | None | Passed all 5 checks on the first try. Output stuck strictly to raw JSON and plain text rules with no Markdown formatting. |
-| `xiaomi/mimo-v2.6-flash` | 4/5 | `billing-double-charge` | Failed schema validation on exit code 7 because the reason contained Markdown characters. Correctly categorized the other 4 tickets. |
-
-### Observations
-
-The main difference between the two models was following the rule about no formatting in the reason text. `minimax/minimax-m3` strictly followed the instruction to use plain text without formatting across all test cases.
-
-On the other hand, `xiaomi/mimo-v2.6-flash` got the categories right but failed the `billing-double-charge` case by putting Markdown (like backticks or bolding) in the reason string. This is a model failure, not a bad test case, because the prompt explicitly said no Markdown.
-
 ## Spec Correction
 
-During the spec review, I updated behavior check #6. The original draft stated that an ambiguous ticket could be assigned to any non-unknown category (including `sales`). I corrected it to require that the prediction match a specific allowed subset (accepting only `billing` or `technical`). This stops a model from passing if it picks a totally unrelated category for a tricky ticket.
+During the spec review, I updated behavior check #6. The original draft stated that an ambiguous ticket could be assigned to any non-unknown category (including `sales`). I corrected it to require that the prediction match a specific allowed subset (accepting only `billing` or `technical`). The allowed-subset rule was chosen for the ambiguous case to prevent the model from passing by lazily picking a completely unrelated category when a ticket straddles the line between two specific issues.
+
 
 ## Code Explanation
 
-In `classifier.py`:
+In `classifier.py`, the `strip_code_fence` function uses this line:
 
 ```python
-if cleaned.startswith("```json") and cleaned.endswith("```"):
-    cleaned = cleaned[7:-3].strip()
+match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
 ```
 
-This snippet strips markdown code fences from the raw LLM output before passing it to `json.loads()`. Even when told to return pure JSON, lightweight models often wrap their responses in markdown formatting blocks. Stripping these out stops the parser from crashing on perfectly fine JSON.
+`re.fullmatch` only succeeds if the entire (already stripped) response is one fenced block. The pattern matches an opening ```` ``` ````, an optional `json` language tag (`(?:json)?`, a non-capturing group), and any whitespace after it. `(.*?)` lazily captures the body, and the trailing `\s*` followed by ```` ``` ```` matches any whitespace plus the closing fence. `re.DOTALL` lets `.` match newlines so multi-line JSON is captured. If it matches, the function returns the captured body (`match.group(1)`); otherwise it returns the text unchanged.
+
+This matters because, even when told to return pure JSON, lightweight models often wrap their responses in Markdown code fences. Stripping them before `json.loads()` stops the parser from failing on otherwise valid JSON.
